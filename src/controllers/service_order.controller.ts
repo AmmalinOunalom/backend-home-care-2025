@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { service_order_model, ServiceOrder, PaymentStatus, ServiceStatus  } from "../model/service_order.model";
 import { employees_model } from "../model/employees.model";
 import { user_model } from "../model/user.model";
-import { sendSMS } from '../middleware/sms.utils';
+import { sendOrderWithReplyButton, sendSMS } from '../middleware/sms.utils';
 import { address_users_details_model } from "../model/address_users_details.model";
 import twilio from "twilio";
 import db from "../config/base.database";
@@ -117,6 +117,85 @@ export const create_service_order = async (req: Request, res: Response): Promise
   }
 };
 
+// export const send_sms_to_employee = async (req: Request, res: Response): Promise<void> => {
+//   let { to: employeePhone } = req.body;
+//   const address_id = req.params.id;
+
+//   const parsedAddressId = Number(address_id);
+//   if (!address_id || isNaN(parsedAddressId) || parsedAddressId <= 0) {
+//     res.status(400).json({ error: 'Invalid or missing address_id' });
+//     return;
+//   }
+
+//   if (!employeePhone || typeof employeePhone !== 'string') {
+//     res.status(400).json({ error: 'Invalid or missing employee phone number (to)' });
+//     return;
+//   }
+
+//   if (!employeePhone.startsWith('+856')) {
+//     employeePhone = '+856' + employeePhone;
+//   }
+
+//   const phoneRegex = /^\+85620\d{7,8}$/;
+//   if (!phoneRegex.test(employeePhone)) {
+//     res.status(400).json({ error: 'Invalid employee phone number format' });
+//     return;
+//   }
+
+//   try {
+//     const employee = await employees_model.get_employee_by_phone(employeePhone);
+//     if (!employee) {
+//       res.status(404).json({ error: 'Employee phone number not found' });
+//       return;
+//     }
+
+//     const serviceDetails = await address_users_details_model.get_address_users_by_id(parsedAddressId);
+//     if (!serviceDetails) {
+//       res.status(404).json({ error: 'No address details found for this address_id' });
+//       return;
+//     }
+
+//     const { contact, locationName, villageName, details, city, mapLink, user_id } = serviceDetails;
+
+//     const message = `ສະບາຍດີ, ນີ້ແມ່ນການເອີ້ນໃຊ້ບໍລິການຈາກ Homecare ໂດຍມີຂໍ້ມູນດັ່ງນີ້:
+// ເບີໂທຜູ້ໃຊ້ບໍລິການ: ${contact}
+// ຊື່ສະຖານທີ່: ${locationName}
+// ບ້ານ: ${villageName}
+// ເມືອງ : ${city}
+// ລາຍລະອຽດ: ${details}
+// ແຜນທີ່: ${mapLink}`;
+
+//     // Send WhatsApp message
+//     const sid = await sendSMS(employeePhone, message);
+
+//     // Use employee's category and price for order
+//     const cat_id = employee.cat_id ?? null;
+//     const amount = employee.price ?? 0;
+
+//     const orderData = {
+//       user_id,
+//       employees_id: employee.id,
+//       cat_id,
+//       address_users_detail_id: parsedAddressId,
+//       amount,
+//       service_status: ServiceStatus.NotStart,
+//       payment_status: PaymentStatus.Paid,
+//     };
+
+//     const createdOrder = await service_order_model.create_service_order(orderData);
+
+//     res.status(200).json({
+//       message: 'WhatsApp message sent and service order created successfully',
+//       sid,
+//       service_order: createdOrder,
+//     });
+//   } catch (error: any) {
+//     res.status(500).json({
+//       error: error.message || 'Failed to send WhatsApp message or create service order',
+//     });
+//   }
+// };
+
 export const send_sms_to_employee = async (req: Request, res: Response): Promise<void> => {
   let { to: employeePhone } = req.body;
   const address_id = req.params.id;
@@ -157,27 +236,23 @@ export const send_sms_to_employee = async (req: Request, res: Response): Promise
 
     const { contact, locationName, villageName, details, city, mapLink, user_id } = serviceDetails;
 
-    const message = `ສະບາຍດີ, ນີ້ແມ່ນການເອີ້ນໃຊ້ບໍລິການຈາກ Homecare ໂດຍມີຂໍ້ມູນດັ່ງນີ້:
-ເບີໂທຜູ້ໃຊ້ບໍລິການ: ${contact}
-ຊື່ສະຖານທີ່: ${locationName}
-ບ້ານ: ${villageName}
-ເມືອງ : ${city}
-ລາຍລະອຽດ: ${details}
-ແຜນທີ່: ${mapLink}`;
+    // ส่ง WhatsApp Template พร้อมข้อมูลและปุ่มตอบรับ
+    const sid = await sendOrderWithReplyButton(employeePhone, {
+      contact,
+      locationName,
+      villageName,
+      city,
+      details,
+      mapLink,
+    });
 
-    // Send WhatsApp message
-    const sid = await sendSMS(employeePhone, message);
-
-    // Use employee's category and price for order
-    const cat_id = employee.cat_id ?? null;
-    const amount = employee.price ?? 0;
-
+    // สร้าง order ใหม่ในระบบ
     const orderData = {
       user_id,
       employees_id: employee.id,
-      cat_id,
+      cat_id: employee.cat_id ?? null,
       address_users_detail_id: parsedAddressId,
-      amount,
+      amount: employee.price ?? 0,
       service_status: ServiceStatus.NotStart,
       payment_status: PaymentStatus.Paid,
     };
@@ -185,10 +260,11 @@ export const send_sms_to_employee = async (req: Request, res: Response): Promise
     const createdOrder = await service_order_model.create_service_order(orderData);
 
     res.status(200).json({
-      message: 'WhatsApp message sent and service order created successfully',
+      message: 'WhatsApp template message sent and service order created successfully',
       sid,
       service_order: createdOrder,
     });
+
   } catch (error: any) {
     res.status(500).json({
       error: error.message || 'Failed to send WhatsApp message or create service order',
@@ -196,97 +272,6 @@ export const send_sms_to_employee = async (req: Request, res: Response): Promise
   }
 };
 
-// export const send_sms_to_employee = async (req: Request, res: Response): Promise<void> => {
-//   let { employee_phone, service_status, payment_status } = req.body;
-//   const address_id = req.params.id;
-
-//   const parsedAddressId = Number(address_id);
-//   if (!address_id || isNaN(parsedAddressId) || parsedAddressId <= 0) {
-//     res.status(400).json({ error: 'Invalid or missing address_id' });
-//     return;
-//   }
-
-//   if (!employee_phone || typeof employee_phone !== 'string') {
-//     res.status(400).json({ error: 'Invalid or missing employee_phone' });
-//     return;
-//   }
-
-//   // Normalize phone format
-//   if (!employee_phone.startsWith('+856')) {
-//     employee_phone = '+856' + employee_phone;
-//   }
-
-//   const phoneRegex = /^\+85620\d{7,8}$/;
-//   if (!phoneRegex.test(employee_phone)) {
-//     res.status(400).json({ error: 'Invalid employee_phone format' });
-//     return;
-//   }
-
-//   // Validate statuses
-//   const validServiceStatuses = ['Not Start','Arrived','In Progress','Finished'];
-//   const validPaymentStatuses = ['not paid','paid'];
-
-//   if (!validServiceStatuses.includes(service_status)) {
-//     res.status(400).json({ error: 'Invalid service_status value' });
-//     return;
-//   }
-
-//   if (!validPaymentStatuses.includes(payment_status)) {
-//     res.status(400).json({ error: 'Invalid payment_status value' });
-//     return;
-//   }
-
-//   try {
-//     const employee = await employees_model.get_employee_by_phone(employee_phone);
-//     if (!employee) {
-//       res.status(404).json({ error: 'Employee phone number not found' });
-//       return;
-//     }
-
-//     const serviceDetails = await address_users_details_model.get_address_users_by_id(parsedAddressId);
-//     if (!serviceDetails) {
-//       res.status(404).json({ error: 'No address details found for this address_id' });
-//       return;
-//     }
-
-//     const { contact, locationName, villageName, details, city, mapLink, user_id } = serviceDetails;
-
-//     const message = `ສະບາຍດີ, ນີ້ແມ່ນການເອີ້ນໃຊ້ບໍລິການຈາກ Homecare ໂດຍມີຂໍ້ມູນດັ່ງນີ້:
-// ເບີໂທຜູ້ໃຊ້ບໍລິການ: ${contact}
-// ຊື່ສະຖານທີ່: ${locationName}
-// ບ້ານ: ${villageName}
-// ເມືອງ : ${city}
-// ລາຍລະອຽດ: ${details}
-// ແຜນທີ່: ${mapLink}`;
-
-//     const sid = await sendSMS(employee_phone, message);
-
-//     const cat_id = employee.cat_id ?? null;
-//     const amount = employee.price ?? 0;
-
-//     const orderData = {
-//       user_id,
-//       employees_id: employee.id,
-//       cat_id,
-//       address_users_detail_id: parsedAddressId,
-//       amount,
-//       service_status,
-//       payment_status,
-//     };
-
-//     const createdOrder = await service_order_model.create_service_order(orderData);
-
-//     res.status(201).json({
-//       message: 'WhatsApp message sent and service order created successfully',
-//       sid,
-//       service_order: createdOrder,
-//     });
-//   } catch (error: any) {
-//     res.status(500).json({
-//       error: error.message || 'Failed to send WhatsApp message or create service order',
-//     });
-//   }
-// };
 
 
 /** 
