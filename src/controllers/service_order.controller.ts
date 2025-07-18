@@ -195,7 +195,6 @@ export const create_service_order = async (req: Request, res: Response): Promise
 //     });
 //   }
 // };
-
 export const send_sms_to_employee = async (req: Request, res: Response): Promise<void> => {
   let { to: employeePhone } = req.body;
   const address_id = req.params.id;
@@ -224,7 +223,7 @@ export const send_sms_to_employee = async (req: Request, res: Response): Promise
   try {
     const employee = await employees_model.get_employee_by_phone(employeePhone);
     if (!employee) {
-      res.status(404).json({ error: 'Employee phone number not found' });
+      res.status(404).json({ error: 'Employee phone number not foundd' });
       return;
     }
 

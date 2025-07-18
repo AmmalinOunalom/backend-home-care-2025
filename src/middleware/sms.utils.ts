@@ -148,12 +148,6 @@ if (!accountSid || !authToken || !fromNumber) {
 
 const client = twilio(accountSid, authToken);
 
-/**
- * ส่งข้อความ WhatsApp ธรรมดา (text message)
- * @param to หมายเลขปลายทาง (รวมรหัสประเทศ เช่น +85620xxxxxxx)
- * @param message ข้อความที่ต้องการส่ง
- * @returns SID ของข้อความที่ส่ง
- */
 export const sendSMS = async (to: string, message: string): Promise<string> => {
   if (!to || !message) {
     throw new Error('Phone number and message are required.');
@@ -179,12 +173,6 @@ export const sendSMS = async (to: string, message: string): Promise<string> => {
   }
 };
 
-/**
- * ส่ง WhatsApp Message แบบ Template พร้อมปุ่ม Reply (Quick Reply)
- * @param to หมายเลขปลายทาง (รวมรหัสประเทศ เช่น +85620xxxxxxx)
- * @param serviceData ข้อมูลที่จะแทนที่ตัวแปรใน Template
- * @returns SID ของข้อความที่ส่ง
- */
 export const sendOrderWithReplyButton = async (
   to: string,
   serviceData: {
@@ -204,7 +192,7 @@ export const sendOrderWithReplyButton = async (
     const message = await client.messages.create({
       from: `whatsapp:${fromNumber}`,
       to: fullTo,
-      contentSid: 'HX9c25d6dc1739f6b92c7b37a567e978b8', // ใช้ template SID ของคุณ
+      contentSid: 'HX9c25d6dc1739f6b92c7b37a567e978b8', // template SID 
       contentVariables: JSON.stringify({
         "1": serviceData.contact,
         "2": serviceData.locationName,
